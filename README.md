@@ -35,8 +35,9 @@ what changed, and the code that replaced the manual work.
 | `Rankings.gs` | ~240 | Script-side ranking, one documented tie rule, no row limit |
 | `Close.gs` | ~150 | The weekly close as one idempotent operation |
 | `Triggers.gs` | ~130 | Declarative schedule; drift detection |
-| `Menu.gs` | ~160 | Operator UI — nobody should need the script editor |
-| `Tests.gs` | ~150 | Unit tests for ranking ties and ISO week arithmetic |
+| `Menu.gs` | ~200 | Operator UI — nobody should need the script editor |
+| `Bootstrap.gs` | ~380 | Builds a working demo from an empty sheet; injects and repairs realistic data faults |
+| `Tests.gs` | ~230 | 20 unit tests: ranking ties, ISO week arithmetic, period round-trips, data generation |
 
 **Start with `Audit.gs`.** It's the piece that does the work everything else depends on:
 inventory before opinion. It runs read-only against any workbook, needs no configuration,
@@ -44,20 +45,47 @@ and writes only its own two report tabs.
 
 ---
 
-## Running it
+## Running it — about 5 minutes
 
 1. New Google Sheet → **Extensions → Apps Script**
 2. Add each `.gs` file with the same names (load order doesn't matter; all cross-file
    references happen at call time)
-3. Create the tabs below
-4. Reload the sheet → the **Sales Ops** menu appears
-5. **Admin → Install/repair triggers**
+3. Save, reload the sheet → the **Sales Ops** menu appears
+4. **Sales Ops → Demo → Build demo system**
 
-`Audit.gs` runs standalone against *any* workbook — it needs no config and writes only its
-two report tabs. That's deliberate: it's the first thing to run on a system you don't
-know yet.
+That's it. `Bootstrap.gs` creates every tab and generates 24 agents across 5 active teams,
+six weeks of deals, targets, closed history, a populated mart and live rankings. It
+refuses to run if the tabs already contain data, so it can't be pointed at a real workbook
+by accident.
+
+Data is generated from a fixed seed, so every run produces identical figures — a demo can
+be rehearsed, and two people looking at two copies see the same numbers.
+
+### The 2-minute walkthrough
+
+The thing worth demonstrating isn't that it's fast. It's that a wrong number can't reach a
+report unnoticed.
+
+| Step | Do | What to point at |
+|---|---|---|
+| 1 | **Demo → Build demo system** | `Rankings` — ranks, team rollups, movement arrows vs the prior week |
+| 2 | **Run data health checks** | `Data Health` — nine checks, all green. `RECONCILE` is the one that matters: the mart still equals the source |
+| 3 | **Demo → Inject data faults** | Four realistic problems: an unknown agent ID, a duplicated deal, a text-formatted date, a missing amount |
+| 4 | **Run data health checks** | Three blockers fire, naming the exact rows and IDs. In the old system all four of these published silently |
+| 5 | **Close the week…** | It refuses, and says why. Being late is recoverable; a wrong commission figure isn't |
+| 6 | **Demo → Repair data faults** | Green again, mart and rankings rebuilt |
+| 7 | **Run system audit** | `_Audit Findings` — the scanner's output on a healthy workbook |
+
+Before using any of this on a real system, delete the **Demo** submenu from `Menu.gs`.
+
+`Audit.gs` also runs standalone against *any* workbook — no config, no other files, writes
+only its two report tabs. That's deliberate: it's the first thing to run on a system you
+don't know yet.
 
 ### Tabs
+
+Created for you by the bootstrap. Listed here because you'll need them if you're wiring
+this to real data instead.
 
 | Tab | Columns |
 |---|---|
@@ -92,9 +120,14 @@ Created automatically on first run: `Data Health`, `Rankings`, `_Log`, `_Health 
 
 ### Tests
 
-Run `runTests()` from the editor. It needs no workbook data — the tests exercise pure
-logic (ranking ties, ISO week arithmetic, join-key normalisation), which is exactly the
-category where a bug produces a plausible wrong number instead of a crash.
+Run `runTests()` from the editor. All 20 need no workbook data — they exercise pure logic
+(ranking ties, ISO week arithmetic, period round-trips, join-key normalisation, data
+generation), which is exactly the category where a bug produces a plausible wrong number
+instead of a crash.
+
+The round-trip test earns its place: if `Bootstrap.mondayOf` and `Lib.isoWeek` ever
+disagree, deals land in the wrong week and every downstream total is quietly wrong — with
+nothing on screen looking unusual.
 
 ---
 

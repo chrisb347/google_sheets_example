@@ -26,7 +26,40 @@ function onOpen() {
       .addItem('Show trigger status', 'menuTriggerStatus')
       .addItem('Install/repair triggers', 'menuInstallTriggers')
       .addItem('Open the runbook', 'menuRunbook'))
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('Demo')
+      .addItem('Build demo system', 'menuBootstrap')
+      .addItem('Inject data faults', 'menuInjectFaults')
+      .addItem('Repair data faults', 'menuRepairFaults'))
     .addToUi();
+}
+
+/* -------------------------------------------------------------------- *
+ * Demo menu — remove this submenu before pointing the code at a real
+ * workbook. Bootstrap refuses to overwrite populated tabs, but the menu
+ * item itself is an invitation nobody needs in production.
+ * -------------------------------------------------------------------- */
+
+function menuBootstrap() {
+  const ui = SpreadsheetApp.getUi();
+  const answer = ui.alert(
+    'Build the demo system?',
+    'This creates the Config, Teams, Agents, Targets, Raw_Sales and ' +
+    'Mart_AgentWeek tabs and fills them with generated sample data — ' +
+    '24 agents across 5 active teams, 6 weeks of deals.\n\n' +
+    'It will refuse to run if those tabs already contain data.\n\n' +
+    'Takes about 30 seconds.',
+    ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return;
+
+  run_('Build demo system', function () { return Bootstrap.bootstrapDemo(); });
+}
+
+function menuInjectFaults() {
+  run_('Inject data faults', function () { return Bootstrap.injectDemoFaults(); });
+}
+
+function menuRepairFaults() {
+  run_('Repair data faults', function () { return Bootstrap.repairDemoFaults(); });
 }
 
 function menuRefresh() {

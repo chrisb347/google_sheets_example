@@ -104,6 +104,75 @@ function runTests() {
     });
   });
 
+  suite_(results, 'Bootstrap period arithmetic', function (t) {
+
+    t('mondayOf returns a Monday for every recent period', function () {
+      Bootstrap.recentPeriods(12).forEach(function (p) {
+        assertEqual_(Bootstrap.mondayOf(p).getDay(), 1, p + ' should map to a Monday');
+      });
+    });
+
+    t('mondayOf and Lib.isoWeek round-trip', function () {
+      // If these two ever disagree, generated deals land in the wrong week and
+      // every downstream total is quietly wrong. This is the check that matters.
+      Bootstrap.recentPeriods(12).forEach(function (p) {
+        assertEqual_(Lib.isoWeek(Bootstrap.mondayOf(p)), p, 'round-trip');
+      });
+    });
+
+    t('round-trips across a 53-week year boundary', function () {
+      assertEqual_(Lib.isoWeek(Bootstrap.mondayOf('2026-W53')), '2026-W53', '');
+      assertEqual_(Lib.isoWeek(Bootstrap.mondayOf('2027-W01')), '2027-W01', '');
+    });
+
+    t('rejects a malformed period key', function () {
+      let threw = false;
+      try { Bootstrap.mondayOf('February'); } catch (e) { threw = true; }
+      assertEqual_(threw, true, 'should throw rather than return a silent wrong date');
+    });
+  });
+
+  suite_(results, 'Bootstrap data generation', function (t) {
+
+    const periods = Bootstrap.recentPeriods(6);
+    const agents = Bootstrap.buildAgents(Bootstrap.buildTeams());
+    const deals = Bootstrap.buildDeals(agents, periods);
+
+    t('every CloseDate falls inside its stated PeriodKey', function () {
+      const bad = deals.filter(function (d) { return Lib.isoWeek(d[3]) !== d[4]; });
+      assertEqual_(bad.length, 0, 'deals tagged with the wrong week');
+    });
+
+    t('generated data is deterministic', function () {
+      // Columns 0-5 only. ImportedAt (6) is deliberately the current time —
+      // the STALE_IMPORT check depends on it being real.
+      const strip = function (rows) {
+        return JSON.stringify(rows.map(function (r) { return r.slice(0, 6); }));
+      };
+      assertEqual_(strip(Bootstrap.buildDeals(agents, periods)), strip(deals),
+        'same seed must produce the same figures, so a demo can be rehearsed');
+    });
+
+    t('no deals dated after an agent EndDate', function () {
+      const ended = agents.filter(function (a) { return a[4] instanceof Date; });
+      assertEqual_(ended.length > 0, true, 'fixture should include end-dated agents');
+      const after = deals.filter(function (d) {
+        const match = ended.filter(function (e) { return e[0] === d[1]; })[0];
+        return match && d[3] > match[4];
+      });
+      assertEqual_(after.length, 0, 'departed agents must stop producing deals');
+    });
+
+    t('revenue spread is uneven enough for rankings to mean something', function () {
+      const byAgent = {};
+      deals.forEach(function (d) { byAgent[d[1]] = (byAgent[d[1]] || 0) + d[5]; });
+      const sorted = Object.keys(byAgent).map(function (k) { return byAgent[k]; })
+                           .sort(function (a, b) { return b - a; });
+      assertEqual_(sorted[0] > sorted[sorted.length - 1] * 2, true,
+        'flat random data makes a ranking demo meaningless');
+    });
+  });
+
   report_(results);
   return results;
 }
